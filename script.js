@@ -118,9 +118,22 @@ function closeAllLists() {
 }
 
 // Global State
+let activeTheme = 'modern';
 let gameMode = 'random'; // 'random' | 'choice'
 let selectedChoiceType = null;
 let challengeQueue = [];
+let score = 0;
+let lives = 5;
+let streak = 0;
+let currentTypes = [];
+
+// Multiplayer State
+let isMultiplayer = false;
+let isHost = false;
+let peer = null;
+let conn = null;
+let opponentScore = 0;
+let opponentLives = 5;
 
 function showTypeSelection() {
     console.log("Opening Type Selection Screen...");
@@ -137,6 +150,139 @@ function showTypeSelection() {
     }
 
     renderTypeSelectionGrid();
+}
+
+// --- MULTIPLAYER NAVIGATION ---
+function showMultiplayerLobby() {
+    themes.lobby.classList.add('hidden');
+    document.getElementById('multiplayerLobby').classList.remove('hidden');
+}
+
+function showJoinInput() {
+    document.getElementById('joinInputContainer').classList.remove('hidden');
+    document.getElementById('joinIdInput').focus();
+}
+
+
+function hostGame() {
+    isHost = true;
+    isMultiplayer = true;
+    document.getElementById('lobbyStatus').textContent = "Conectando a servidor...";
+
+    peer = new Peer();
+
+    peer.on('open', (id) => {
+        document.getElementById('lobbyStatus').innerHTML = `Tu Código de Sala:<br><span style="font-size:1.5em;color:#4caf50;user-select:all">${id}</span><br>Esperando oponente...`;
+    });
+
+    peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnection();
+        document.getElementById('lobbyStatus').textContent = "¡Oponente conectado! Iniciando...";
+        setTimeout(() => startMultiplayerGame(), 2000);
+    });
+
+    peer.on('error', (err) => {
+        console.error(err);
+        document.getElementById('lobbyStatus').textContent = "Error de conexión: " + err.type;
+    });
+}
+
+function joinGame() {
+    const hostId = document.getElementById('joinIdInput').value.trim();
+    if (!hostId) return;
+
+    isHost = false;
+    isMultiplayer = true;
+    document.getElementById('lobbyStatus').textContent = "Conectando...";
+
+    peer = new Peer();
+
+    peer.on('open', () => {
+        conn = peer.connect(hostId);
+        setupConnection();
+    });
+
+    peer.on('error', (err) => {
+        console.error(err);
+        document.getElementById('lobbyStatus').textContent = "Error: " + err.type;
+    });
+}
+
+function setupConnection() {
+    conn.on('open', () => {
+        console.log("Connected to peer!");
+    });
+
+    conn.on('data', (data) => {
+        handleData(data);
+    });
+}
+
+function startMultiplayerGame() {
+    themes.lobby.classList.add('hidden'); // Hide all lobby elements
+    document.getElementById('multiplayerLobby').classList.add('hidden');
+
+    // Show Game UI
+    if (activeTheme === 'modern') {
+        themes.modern.classList.remove('hidden');
+        document.getElementById('opponentStatsModern').classList.remove('hidden');
+    } else {
+        themes.retro.classList.remove('hidden');
+        document.getElementById('opponentStatsRetro').classList.remove('hidden');
+    }
+
+    // Reset Game State
+    score = 0;
+    streak = 0;
+    lives = 5;
+    opponentScore = 0;
+    opponentLives = 5;
+    currentTypes = [];
+    seenTypeSignatures.clear();
+
+    updateUI();
+    updateOpponentUI();
+
+    if (isHost) {
+        // Host initiates the first Pokemon
+        fetchRandomSourcePokemon();
+    } else {
+        // Guest waits
+        document.getElementById("typesModern").innerHTML = '<span style="font-size:0.9rem;opacity:0.7">Esperando al Host...</span>';
+        document.getElementById("typesRetro").innerHTML = '<span style="font-size:8px;color:#aaa">WAITING HOST...</span>';
+    }
+}
+
+function handleData(data) {
+    console.log("Received:", data);
+
+    if (data.type === 'POKEMON') {
+        // Receive Pokemon Data from Host
+        currentTypes = data.types;
+        renderTypes();
+        setBtnLoading(false);
+        inputs[activeTheme].focus();
+    }
+    else if (data.type === 'UPDATE') {
+        // Update Opponent Stats
+        opponentScore = data.score;
+        opponentLives = data.lives;
+        updateOpponentUI();
+    }
+    else if (data.type === 'GAME_OVER') {
+        showFeedback("¡El oponente perdió!", "success");
+        // Optional: End game immediately or let player finish?
+        // For now, let's just notify.
+    }
+}
+
+function updateOpponentUI() {
+    document.getElementById('oppScoreModern').textContent = opponentScore;
+    document.getElementById('oppLivesModern').textContent = opponentLives; // Simplified
+
+    document.getElementById('oppScoreRetro').textContent = opponentScore.toString().padStart(3, '0');
+    document.getElementById('oppLivesRetro').textContent = opponentLives;
 }
 
 function renderTypeSelectionGrid() {
@@ -264,9 +410,15 @@ async function fetchRandomSourcePokemon() {
     document.getElementById("typesModern").innerHTML = '<span style="font-size:0.9rem;opacity:0.7">Buscando rastros...</span>';
     document.getElementById("typesRetro").innerHTML = '<span style="font-size:8px;color:#aaa">LOADING...</span>';
     clearFeedback();
-    inputs.modern.value = "";
-    inputs.retro.value = "";
+    inputs[activeTheme].value = "";
+    // inputs[activeTheme].value = ""; // Don't clear if user is typing? No, new round.
+
     setBtnLoading(true);
+
+    if (isMultiplayer && !isHost) {
+        // Guest does nothing, waits for 'POKEMON' event
+        return;
+    }
 
     if (gameMode === 'choice') {
         // No async needed really, but keeping structure
@@ -397,6 +549,10 @@ function fetchRandomUnique() {
             currentTypes = newTypes;
             seenTypeSignatures.add(signature);
         }
+    }
+
+    if (isMultiplayer && isHost && conn) {
+        conn.send({ type: 'POKEMON', types: currentTypes });
     }
 
     renderTypes();
@@ -584,6 +740,11 @@ async function checkAnswer() {
             score++;
             streak++; // Increment Streak
             showFeedback("¡Correcto!", "success");
+
+            if (isMultiplayer && conn) {
+                conn.send({ type: 'UPDATE', score: score, lives: lives });
+            }
+
             triggerConfetti();
             checkStreak(); // Check for 5, 10, etc.
             updateUI();
@@ -627,6 +788,11 @@ function skip() {
 function deductLife() {
     lives--;
     updateUI();
+
+    if (isMultiplayer && conn) {
+        conn.send({ type: 'UPDATE', score: score, lives: lives });
+    }
+
     if (lives <= 0) {
         // GAME OVER LOGIC
         try {
@@ -634,6 +800,10 @@ function deductLife() {
         } catch (e) { console.error("Overlay error path:", e); }
 
         showFeedback("GAME OVER", "error");
+
+        if (isMultiplayer && conn) {
+            conn.send({ type: 'GAME_OVER', score: score });
+        }
 
         setTimeout(() => {
             alert(`GAME OVER\nPuntaje Final: ${score}`);

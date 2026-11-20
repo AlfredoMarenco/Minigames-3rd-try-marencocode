@@ -52,11 +52,11 @@
                     <p>Elige un tipo y completa todas sus combinaciones.</p>
                 </div>
 
-                <!-- Slot 3: Locked -->
-                <div class="mode-card locked-mode">
-                    <div class="mode-icon">🔒</div>
-                    <h3>Próximamente</h3>
-                    <p>Nuevo modo en desarrollo...</p>
+                <!-- Slot 3: Multiplayer Mode -->
+                <div class="mode-card active-mode" onclick="showMultiplayerLobby()">
+                    <div class="mode-icon">👥</div>
+                    <h3>Multijugador</h3>
+                    <p>Vs. en tiempo real. ¡El que más acierte gana!</p>
                 </div>
 
                 <!-- Slot 4: Locked -->
@@ -101,7 +101,43 @@
         </div>
     </div>
 
-    <!-- WRAPPER: MODERN -->
+    <!-- MULTIPLAYER LOBBY -->
+    <div id="multiplayerLobby" class="theme-wrapper modern hidden">
+        <button class="home-btn" onclick="returnToLobby()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+        </button>
+        <div class="lobby-container">
+            <h1 class="lobby-title">Multijugador Online</h1>
+            <p style="text-align:center; opacity:0.8; margin-bottom:20px;">Juega 1vs1 contra un amigo.</p>
+
+            <div class="lobby-grid" style="grid-template-columns: 1fr 1fr; max-width:600px;">
+                <!-- HOST -->
+                <div class="mode-card" onclick="hostGame()">
+                    <div class="mode-icon">📡</div>
+                    <h3>Crear Sala</h3>
+                    <p>Obtén un código para compartir.</p>
+                </div>
+                <!-- JOIN -->
+                <div class="mode-card" onclick="showJoinInput()">
+                    <div class="mode-icon">🔗</div>
+                    <h3>Unirse</h3>
+                    <p>Ingresa el código de un amigo.</p>
+                </div>
+            </div>
+
+            <div id="lobbyStatus" style="margin-top:20px; text-align:center; font-weight:bold;"></div>
+
+            <div id="joinInputContainer" class="hidden" style="margin-top:20px; text-align:center;">
+                <input type="text" id="joinIdInput" placeholder="Ingresa ID de Sala"
+                    style="padding:10px; border-radius:8px; border:1px solid #ccc; width:200px; color:#000;">
+                <button class="main-btn" onclick="joinGame()" style="margin-top:10px;">Conectar</button>
+            </div>
+        </div>
+    </div>
     <div id="modernUI" class="theme-wrapper modern hidden">
         <button class="home-btn" onclick="tryExit()">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -117,6 +153,13 @@
                 <div style="background:rgba(255,255,255,0.1); padding:5px 12px; border-radius:15px;">
                     🏆 <span id="scoreModern">0</span>
                 </div>
+            </div>
+
+            <!-- OPONENTE (Multijugador) -->
+            <div id="opponentStatsModern" class="hidden"
+                style="background:rgba(0,0,0,0.2); padding:5px 10px; border-radius:10px; margin-bottom:15px; font-size:0.9rem; display:flex; justify-content:space-between;">
+                <span>👤 Oponente:</span>
+                <span>❤ <span id="oppLivesModern">5</span> | 🏆 <span id="oppScoreModern">0</span></span>
             </div>
 
             <h1>Pokemon Types</h1>
@@ -170,6 +213,13 @@
                         <span>SC: <span id="scoreRetro">000</span></span>
                     </div>
 
+                    <!-- OPONENTE (Multijugador) -->
+                    <div id="opponentStatsRetro" class="hidden"
+                        style="width:100%; display:flex; justify-content:space-between; font-size:8px; color:#aaa; margin-top:2px;">
+                        <span>OPP:</span>
+                        <span>❤ <span id="oppLivesRetro">5</span> | SC: <span id="oppScoreRetro">000</span></span>
+                    </div>
+
                     <h1>¿QUIEN ES?</h1>
 
                     <div id="typesRetro" class="types-container">
@@ -210,7 +260,8 @@
         </div>
     </div>
 
-    <!-- Script Logic -->
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <!-- Local Data -->
     <script src="pokemon_data.js"></script>
     <script src="script.js"></script>
